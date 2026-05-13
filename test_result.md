@@ -107,7 +107,7 @@ backend:
   - task: "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
     implemented: true
     working: true
-    file: "app/api/[[...path]]/route.js, lib/server/api/router.ts"
+    file: "app/api/[[...path]]/route.ts, lib/server/api/router.ts"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
@@ -118,6 +118,12 @@ backend:
       - working: true
         agent: "testing"
         comment: "All 12 backend API tests passed successfully. Verified: (1) GET /api/health returns integration status, (2) POST /api/auth/register creates user+sessionToken with valid payload, (3) POST /api/auth/register returns 400 with missing fields, (4) POST /api/auth/login returns user+sessionToken with valid credentials, (5) POST /api/auth/login returns 400 with missing fields, (6) GET /api/documents returns documents array, (7) POST /api/documents creates document with valid metadata, (8) POST /api/documents returns 400 with missing fields, (9) DELETE /api/documents/{id} removes document successfully, (10) DELETE /api/documents/{unknown_id} returns 404, (11) POST /api/chat/ask returns scaffold answer with valid payload, (12) POST /api/chat/ask returns 400 with missing fields. All endpoints functioning correctly with proper validation and error handling."
+      - working: "NA"
+        agent: "main"
+        comment: "Migrated route wrapper from route.js to route.ts for TypeScript-first architecture; requesting backend retest to confirm no regression."
+      - working: true
+        agent: "testing"
+        comment: "Regression testing completed after TypeScript migration. All 12 backend API tests passed with 100% success rate. Confirmed NO REGRESSION: (1) GET /api/health returns correct integration status with 200, (2) POST /api/auth/register creates user+sessionToken with valid payload (200), (3) POST /api/auth/register properly validates and returns 400 for missing fields, (4) POST /api/auth/login authenticates and returns user+sessionToken (200), (5) POST /api/auth/login validates and returns 400 for missing fields, (6) GET /api/documents returns documents array (200), (7) POST /api/documents creates document with valid metadata (200), (8) POST /api/documents validates and returns 400 for missing fields, (9) DELETE /api/documents/{id} successfully removes document (200), (10) DELETE /api/documents/{unknown_id} returns 404 for non-existent document, (11) POST /api/chat/ask returns scaffold answer with valid payload (200), (12) POST /api/chat/ask validates and returns 400 for missing fields. TypeScript migration successful with zero functional impact."
 frontend:
   - task: "Enterprise dashboard shell + page architecture + protected routes"
     implemented: true
@@ -144,7 +150,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 test_plan:
   current_focus:
@@ -157,3 +163,7 @@ agent_communication:
     message: "Backend scaffold is ready for API validation first. Please test health, auth placeholder, documents CRUD metadata endpoints, and chat ask placeholder response flow."
   - agent: "testing"
     message: "Backend API testing completed successfully. All 12 test cases passed: health endpoint, auth register/login with validation, documents CRUD operations, and chat ask placeholder. All endpoints return correct status codes, proper error handling for missing fields, and expected data structures. Backend scaffold is fully functional and ready for integration."
+  - agent: "main"
+    message: "Migrated route wrapper from route.js to route.ts for TypeScript-first architecture. Requesting regression testing to confirm no functional impact."
+  - agent: "testing"
+    message: "Regression testing completed after TypeScript migration. All 12/12 backend API tests passed with zero failures. Confirmed NO REGRESSION - all endpoints (health, auth register/login, documents CRUD, chat ask) function identically to pre-migration state with correct status codes (200/400/404), proper validation, and expected response structures. TypeScript migration successful."
