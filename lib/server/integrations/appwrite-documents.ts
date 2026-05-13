@@ -13,10 +13,24 @@ const mapDocument = (raw: any): KnowledgeDocument => ({
   status: raw.status,
   createdAt: raw.createdAt,
   uploadedBy: raw.uploadedBy,
-  chunkCount: raw.chunkCount || 0,
+  chunkCount: typeof raw.chunkCount === "number" ? raw.chunkCount : 0,
   storageFileId: raw.storageFileId,
   errorMessage: raw.errorMessage,
 });
+
+const stripUnsupportedAttributes = (payload: Record<string, unknown>, errorMessage: string) => {
+  const nextPayload = { ...payload };
+
+  if (errorMessage.includes('Unknown attribute: "chunkCount"')) {
+    delete nextPayload.chunkCount;
+  }
+
+  if (errorMessage.includes('Unknown attribute: "errorMessage"')) {
+    delete nextPayload.errorMessage;
+  }
+
+  return nextPayload;
+};
 
 export const createKnowledgeDocument = async (input: {
   userId: string;
@@ -28,25 +42,45 @@ export const createKnowledgeDocument = async (input: {
 }) => {
   await ensureAppwriteSchema();
 
-  const created = await appwriteDatabases.createDocument(
-    appwriteConfig.databaseId,
-    appwriteConfig.documentsCollectionId,
-    appwriteId.unique(),
-    {
-      userId: input.userId,
-      name: input.name,
-      type: input.type,
-      size: input.size,
-      status: "processing",
-      uploadedBy: input.uploadedBy,
-      storageFileId: input.storageFileId,
-      chunkCount: 0,
-      errorMessage: "",
-      createdAt: new Date().toISOString(),
-    }
-  );
+  const payload: Record<string, unknown> = {
+    userId: input.userId,
+    name: input.name,
+    type: input.type,
+    size: input.size,
+    status: "processing",
+    uploadedBy: input.uploadedBy,
+    storageFileId: input.storageFileId,
+    chunkCount: 0,
+    errorMessage: "",
+    createdAt: new Date().toISOString(),
+  };
 
-  return mapDocument(created);
+  try {
+    const created = await appwriteDatabases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.documentsCollectionId,
+      appwriteId.unique(),
+      payload
+    );
+
+    return mapDocument(created);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const strippedPayload = stripUnsupportedAttributes(payload, message);
+
+    if (Object.keys(strippedPayload).length === Object.keys(payload).length) {
+      throw error;
+    }
+
+    const created = await appwriteDatabases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.documentsCollectionId,
+      appwriteId.unique(),
+      strippedPayload
+    );
+
+    return mapDocument(created);
+  }
 };
 
 export const updateKnowledgeDocumentStatus = async (
@@ -67,18 +101,38 @@ export const updateKnowledgeDocumentStatus = async (
     throw new Error("Unauthorized to update this document.");
   }
 
-  const updated = await appwriteDatabases.updateDocument(
-    appwriteConfig.databaseId,
-    appwriteConfig.documentsCollectionId,
-    documentId,
-    {
-      status,
-      chunkCount: updates?.chunkCount ?? existing.chunkCount ?? 0,
-      errorMessage: updates?.errorMessage ?? existing.errorMessage ?? "",
-    }
-  );
+  const payload: Record<string, unknown> = {
+    status,
+    chunkCount: updates?.chunkCount ?? existing.chunkCount ?? 0,
+    errorMessage: updates?.errorMessage ?? existing.errorMessage ?? "",
+  };
 
-  return mapDocument(updated);
+  try {
+    const updated = await appwriteDatabases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.documentsCollectionId,
+      documentId,
+      payload
+    );
+
+    return mapDocument(updated);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const strippedPayload = stripUnsupportedAttributes(payload, message);
+
+    if (Object.keys(strippedPayload).length === Object.keys(payload).length) {
+      throw error;
+    }
+
+    const updated = await appwriteDatabases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.documentsCollectionId,
+      documentId,
+      strippedPayload
+    );
+
+    return mapDocument(updated);
+  }
 };
 
 export const listKnowledgeDocuments = async (userId: string) => {

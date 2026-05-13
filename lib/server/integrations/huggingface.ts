@@ -1,6 +1,7 @@
 const huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY;
 const huggingFaceModel =
   process.env.HUGGINGFACE_EMBED_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
+const huggingFaceEndpoint = `https://router.huggingface.co/hf-inference/models/${huggingFaceModel}/pipeline/feature-extraction`;
 
 const toVector = (payload: unknown): number[] => {
   if (!Array.isArray(payload)) {
@@ -42,7 +43,7 @@ export const generateEmbedding = async (text: string) => {
     return [];
   }
 
-  const response = await fetch(`https://api-inference.huggingface.co/models/${huggingFaceModel}`, {
+  const response = await fetch(huggingFaceEndpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${huggingFaceApiKey}`,
@@ -54,10 +55,21 @@ export const generateEmbedding = async (text: string) => {
     }),
   });
 
-  const data = await response.json().catch(() => ({}));
+  const rawText = await response.text();
+  const data = (() => {
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      return rawText;
+    }
+  })();
 
   if (!response.ok) {
-    throw new Error(data?.error || "HuggingFace embedding request failed.");
+    if (typeof data === "string") {
+      throw new Error(data.slice(0, 220));
+    }
+
+    throw new Error((data as any)?.error || `HuggingFace embedding request failed (${response.status}).`);
   }
 
   return toVector(data);

@@ -108,7 +108,7 @@ backend:
     implemented: true
     working: false
     file: "app/api/[[...path]]/route.ts, lib/server/api/router.ts"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -130,6 +130,12 @@ backend:
       - working: false
         agent: "testing"
         comment: "Live integration testing completed: 12/17 tests passed (70.6%). PASSED: (1) GET /api/health with integration flags (appwrite, pinecone, groq, huggingFace all true), (2) POST /api/auth/register with unique email returns user+sessionToken+cookie, (3) POST /api/auth/register validates missing fields (400), (4) POST /api/auth/login with valid credentials works, (5) POST /api/auth/login validates missing fields (400), (6) Protected endpoints reject without auth (401), (7) Protected endpoints succeed with auth cookie, (8) POST /api/uploads/init returns uploadId, (9) POST /api/uploads/chunk for all chunks succeeds, (10) POST /api/chat/ask validates missing fields (400), (11) GET /api/chat/history validates missing sessionId (400), (12) POST /api/uploads/init validates missing fields (400). FAILED: (1) POST /api/uploads/complete returns 500 - Appwrite database error 'Invalid document structure: Unknown attribute: chunkCount' - schema attributes not created in Appwrite collection, (2) GET /api/documents after upload returns 0 documents (dependent on upload complete), (3) POST /api/chat/ask returns 500 (dependent on document upload), (4) GET /api/chat/history returns 0 messages (dependent on chat/ask), (5) DELETE /api/documents/{id} cannot be tested (no document ID available). CRITICAL ISSUES: (A) Appwrite collection schema missing 'chunkCount' attribute despite ensureAppwriteSchema() call - schema creation may be failing silently or attributes not propagating, (B) Fixed pdf-parse dynamic import issue to resolve Next.js SSR error, (C) Fixed node-appwrite v24 InputFile removal by converting Buffer to File object. Core auth, chunked upload init/chunk, and validation flows working correctly."
+      - working: "NA"
+        agent: "main"
+        comment: "Applied integration fixes after failed tests: updated Appwrite schema creation with proper integer attribute signature + readiness waits, added fallback payload handling for missing chunkCount/errorMessage attributes, and migrated HuggingFace embedding endpoint to router.huggingface.co for live inference. Requesting backend retest."
+      - working: false
+        agent: "testing"
+        comment: "Backend retest completed: 11/17 tests passed (64.7%). ✅ WORKING: (1) GET /api/health with all integration flags true, (2-5) Appwrite auth register/login with validation working correctly, (6) Protected endpoint auth guards (401 without auth), (7-9) Chunked upload init/chunk succeeds, (10-12) All validation flows (400 errors) working. ❌ CRITICAL BLOCKER PERSISTS: Appwrite createIntegerAttribute for 'chunkCount' still failing with 'Invalid default param: Value must be a valid signed 64-bit integer or null' error. TESTING AGENT FIXES APPLIED: (1) Fixed HuggingFace endpoint by adding missing '/pipeline/feature-extraction' path (was router.huggingface.co/hf-inference/models/{model} → now router.huggingface.co/hf-inference/models/{model}/pipeline/feature-extraction), (2) Attempted to fix Appwrite schema by correcting positional parameter order (swapped default and array params) and using undefined for default value, but error persists. ROOT CAUSE: The positional parameter format for createIntegerAttribute appears incompatible with current node-appwrite SDK. Current code: createIntegerAttribute(db, collectionId, 'chunkCount', false, 0, 100000, undefined, false) still throws validation error. RECOMMENDATION: Main agent should use object parameter format instead: createIntegerAttribute({databaseId, collectionId, key: 'chunkCount', required: false, min: 0, max: 100000, array: false}) and omit default parameter entirely. This blocks: POST /api/uploads/complete (500), GET /api/documents (500), POST /api/chat/ask (500), GET /api/chat/history (500), DELETE /api/documents (untestable)."
 frontend:
   - task: "Enterprise dashboard shell + page architecture + protected routes"
     implemented: true
@@ -162,12 +168,13 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 6
+  test_sequence: 7
   run_ui: false
 test_plan:
   current_focus:
     - "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
   test_all: false
   test_priority: "high_first"
 agent_communication:
@@ -185,5 +192,11 @@ agent_communication:
     message: "Frontend smoke testing completed with 100% pass rate (9/9 test suites). All MVP flows verified: ✅ Page loads (landing, login, register, all dashboard routes), ✅ Protected route middleware (unauthenticated /dashboard → /login?next=/dashboard), ✅ Complete auth flow (register → dashboard → navigation to all 5 routes), ✅ Responsive layout (desktop 1920x1080 + mobile 390x844), ✅ Theme toggle (light ↔ dark with proper class/style updates), ✅ Zustand auth persistence (survives page refresh via localStorage + cookie sync), ✅ Logout flow (clears state, redirects, re-protects routes), ✅ Re-login with existing credentials, ✅ Zero critical console/runtime errors (no hydration, type, or reference errors). Enterprise dashboard shell is production-ready for MVP launch."
   - agent: "main"
     message: "Implemented live integration architecture: Appwrite auth/db/storage wiring, chunked upload pipeline, PDF/DOCX/TXT extraction, text chunking, HuggingFace embeddings, Pinecone indexing/retrieval, Groq answer generation, and Appwrite chat persistence. Requesting backend verification on new routes and flows."
+  - agent: "main"
+    message: "Applied fixes for Appwrite schema + HuggingFace endpoint after failed live integration test. Please rerun backend tests for upload complete, document list, chat ask, history persistence, and delete flow."
   - agent: "testing"
     message: "Live integration backend testing completed: 12/17 tests passed (70.6%). ✅ WORKING: Health endpoint with all integration flags, Appwrite auth (register/login with cookie), protected endpoint auth guards, chunked upload init/chunk, all validation flows. ❌ CRITICAL BLOCKER: POST /api/uploads/complete fails with Appwrite error 'Invalid document structure: Unknown attribute: chunkCount'. Root cause: Appwrite collection schema missing chunkCount attribute despite ensureAppwriteSchema() call in code. Schema creation may be failing silently or attributes not propagating to live Appwrite instance. This blocks document upload, RAG chat, and delete flows. FIXES APPLIED: (1) Fixed pdf-parse Next.js SSR error with dynamic import, (2) Fixed node-appwrite v24 InputFile removal by converting Buffer to File object. Recommend: Verify Appwrite database/collection configuration and manually ensure chunkCount attribute exists in rag_documents collection."
+  - agent: "main"
+    message: "Applied fixes for Appwrite schema + HuggingFace endpoint after failed live integration test. Please rerun backend tests for upload complete, document list, chat ask, history persistence, and delete flow."
+  - agent: "testing"
+    message: "Backend retest after fixes: 11/17 tests passed (64.7%). ✅ NO REGRESSION: Auth flows (register/login/validation), health endpoint, protected routes, chunked upload init/chunk, all validation endpoints working. ❌ CRITICAL BLOCKER PERSISTS: Appwrite createIntegerAttribute('chunkCount') fails with 'Invalid default param: Value must be a valid signed 64-bit integer or null'. TESTING AGENT APPLIED FIXES: (1) ✅ Fixed HuggingFace endpoint - added missing '/pipeline/feature-extraction' path to router.huggingface.co URL, (2) ❌ Attempted Appwrite schema fix - corrected positional parameter order and tried undefined for default, but error persists. ROOT CAUSE: Positional parameter format incompatible with node-appwrite SDK. Current: createIntegerAttribute(db, collectionId, 'chunkCount', false, 0, 100000, undefined, false) → still throws validation error. SOLUTION NEEDED: Use object parameter format: createIntegerAttribute({databaseId, collectionId, key: 'chunkCount', required: false, min: 0, max: 100000, array: false}) and omit default entirely. BLOCKED FLOWS: Upload complete (500), document list (500), chat ask (500), chat history (500), document delete (untestable). Main agent must fix Appwrite schema creation to unblock RAG pipeline."
