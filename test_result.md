@@ -127,34 +127,41 @@ backend:
 frontend:
   - task: "Enterprise dashboard shell + page architecture + protected routes"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/page-entry.tsx, app/dashboard/**, components/dashboard/**, middleware.ts"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Built landing/login/register/dashboard/upload/chat/documents/settings pages with responsive SaaS UI, glassmorphism, gradients, dark mode, and auth-guard shell."
+      - working: true
+        agent: "testing"
+        comment: "Comprehensive smoke testing completed successfully. All 9 test suites passed: (1) Page load smoke - landing (/), login, register pages load correctly with proper UI elements, (2) Protected routes - unauthenticated access to /dashboard correctly redirects to /login?next=%2Fdashboard as expected, (3) Auth flow & navigation - registration flow works, user successfully redirected to dashboard, all 5 dashboard routes accessible and rendering correctly (Dashboard Overview, Upload Documents, AI Chat, Document Library, Settings), (4) Responsive layout - tested on desktop (1920x1080) and mobile (390x844) viewports, both landing and dashboard pages render properly on mobile, (5) Theme toggle - dark/light mode switching works correctly with proper class changes (light ↔ dark) and color-scheme updates, (6) Auth persistence - Zustand store with localStorage and cookie sync working perfectly, user remains authenticated after page refresh, (7) Logout flow - logout button works, clears auth state, redirects to login, and dashboard becomes protected again, (8) Re-login - existing user can log back in successfully with same credentials, (9) Console/runtime sanity - no critical hydration, type error, reference error, or syntax errors detected during entire test suite. All core MVP flows working as expected."
   - task: "Zustand auth store, theme provider, loading states and toasts"
     implemented: true
-    working: "NA"
+    working: true
     file: "stores/auth-store.ts, app/providers.tsx, app/loading.tsx, app/dashboard/loading.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Added persisted auth state scaffold with cookie sync, global theme provider, Sonner toast notifications, and loading skeletons."
+      - working: true
+        agent: "testing"
+        comment: "Zustand auth store and theme provider tested and verified working. Auth persistence confirmed: (1) Login state persists across page refreshes via localStorage (knowledge-iq-auth) and cookie (rag_scaffold_session), (2) Cookie sync working - auth cookie set on login with 7-day expiration, cleared on logout, (3) Theme provider working - next-themes integration functional, theme toggle switches between light/dark modes with proper HTML class and style attribute updates, (4) Toast notifications observed during auth flows (success messages on login/register/logout). Auth state management is robust and production-ready for MVP."
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 3
-  run_ui: false
+  test_sequence: 5
+  run_ui: true
 test_plan:
   current_focus:
-    - "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
+    - "Enterprise dashboard shell + page architecture + protected routes"
+    - "Zustand auth store, theme provider, loading states and toasts"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -167,3 +174,7 @@ agent_communication:
     message: "Migrated route wrapper from route.js to route.ts for TypeScript-first architecture. Requesting regression testing to confirm no functional impact."
   - agent: "testing"
     message: "Regression testing completed after TypeScript migration. All 12/12 backend API tests passed with zero failures. Confirmed NO REGRESSION - all endpoints (health, auth register/login, documents CRUD, chat ask) function identically to pre-migration state with correct status codes (200/400/404), proper validation, and expected response structures. TypeScript migration successful."
+  - agent: "main"
+    message: "User approved lightweight frontend smoke testing. Please validate page loads, dashboard navigation, protected route redirects, dark/light theme toggle, responsive desktop-mobile behavior, and auth persistence across refresh in MVP scope."
+  - agent: "testing"
+    message: "Frontend smoke testing completed with 100% pass rate (9/9 test suites). All MVP flows verified: ✅ Page loads (landing, login, register, all dashboard routes), ✅ Protected route middleware (unauthenticated /dashboard → /login?next=/dashboard), ✅ Complete auth flow (register → dashboard → navigation to all 5 routes), ✅ Responsive layout (desktop 1920x1080 + mobile 390x844), ✅ Theme toggle (light ↔ dark with proper class/style updates), ✅ Zustand auth persistence (survives page refresh via localStorage + cookie sync), ✅ Logout flow (clears state, redirects, re-protects routes), ✅ Re-login with existing credentials, ✅ Zero critical console/runtime errors (no hydration, type, or reference errors). Enterprise dashboard shell is production-ready for MVP launch."
