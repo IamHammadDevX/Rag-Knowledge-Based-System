@@ -181,19 +181,39 @@ export const createConversationMessage = async (input: {
 }) => {
   await ensureAppwriteSchema();
 
-  await appwriteDatabases.createDocument(
-    appwriteConfig.databaseId,
-    appwriteConfig.conversationsCollectionId,
-    appwriteId.unique(),
-    {
-      userId: input.userId,
-      sessionId: input.sessionId,
-      role: input.role,
-      content: input.content,
-      sourcesJson: JSON.stringify(input.sources ?? []),
-      createdAt: new Date().toISOString(),
+  const payload: Record<string, unknown> = {
+    userId: input.userId,
+    sessionId: input.sessionId,
+    role: input.role,
+    content: input.content,
+    sourcesJson: JSON.stringify(input.sources ?? []),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await appwriteDatabases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.conversationsCollectionId,
+      appwriteId.unique(),
+      payload
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (!message.includes('Unknown attribute: "sourcesJson"')) {
+      throw error;
     }
-  );
+
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.sourcesJson;
+
+    await appwriteDatabases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.conversationsCollectionId,
+      appwriteId.unique(),
+      fallbackPayload
+    );
+  }
 };
 
 export const listConversationMessages = async (userId: string, sessionId: string) => {

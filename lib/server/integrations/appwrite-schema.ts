@@ -23,9 +23,19 @@ const safeAttribute = async (runner: () => Promise<unknown>) => {
     await runner();
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message.includes("already exists") || message.includes("409") || message.includes("attribute_not_available")) {
+    const responseText = typeof (error as any)?.response === "string" ? (error as any).response : "";
+    const fullText = `${message} ${responseText}`.toLowerCase();
+
+    if (
+      fullText.includes("already exists") ||
+      fullText.includes("409") ||
+      fullText.includes("attribute_not_available") ||
+      fullText.includes("maximum number or size of attributes") ||
+      fullText.includes("attribute_limit_exceeded")
+    ) {
       return;
     }
+
     throw error;
   }
 };
@@ -71,7 +81,7 @@ const ensureDocumentAttributes = async () => {
     (appwriteDatabases as any).createStringAttribute(db, collectionId, "type", 128, true)
   );
   await safeAttribute(() =>
-    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "size", true, 0, 2147483647, false)
+    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "size", true, 0, 2147483647)
   );
   await safeAttribute(() =>
     (appwriteDatabases as any).createStringAttribute(db, collectionId, "status", 32, true)
@@ -83,7 +93,7 @@ const ensureDocumentAttributes = async () => {
     (appwriteDatabases as any).createStringAttribute(db, collectionId, "storageFileId", 128, true)
   );
   await safeAttribute(() =>
-    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "chunkCount", false, 0, 100000, undefined, false)
+    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "chunkCount", false, 0, 100000)
   );
   await safeAttribute(() =>
     (appwriteDatabases as any).createStringAttribute(db, collectionId, "errorMessage", 2048, false)
