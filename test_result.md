@@ -142,11 +142,11 @@ backend:
 frontend:
   - task: "Enterprise dashboard shell + page architecture + protected routes"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/page-entry.tsx, app/dashboard/**, components/dashboard/**, middleware.ts"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -154,13 +154,19 @@ frontend:
       - working: true
         agent: "testing"
         comment: "Comprehensive smoke testing completed successfully. All 9 test suites passed: (1) Page load smoke - landing (/), login, register pages load correctly with proper UI elements, (2) Protected routes - unauthenticated access to /dashboard correctly redirects to /login?next=%2Fdashboard as expected, (3) Auth flow & navigation - registration flow works, user successfully redirected to dashboard, all 5 dashboard routes accessible and rendering correctly (Dashboard Overview, Upload Documents, AI Chat, Document Library, Settings), (4) Responsive layout - tested on desktop (1920x1080) and mobile (390x844) viewports, both landing and dashboard pages render properly on mobile, (5) Theme toggle - dark/light mode switching works correctly with proper class changes (light ↔ dark) and color-scheme updates, (6) Auth persistence - Zustand store with localStorage and cookie sync working perfectly, user remains authenticated after page refresh, (7) Logout flow - logout button works, clears auth state, redirects to login, and dashboard becomes protected again, (8) Re-login - existing user can log back in successfully with same credentials, (9) Console/runtime sanity - no critical hydration, type error, reference error, or syntax errors detected during entire test suite. All core MVP flows working as expected."
+      - working: "NA"
+        agent: "main"
+        comment: "Upgraded frontend to live mode with chunked upload progress UI, live RAG chat + persisted history loading, dashboard status updates, and hydration-safe theme/toaster behavior. Requesting fresh frontend smoke validation."
+      - working: true
+        agent: "testing"
+        comment: "Live integration smoke testing completed successfully with 100% pass rate. All 8 test suites passed: (1) Protected routes - unauthenticated /dashboard correctly redirects to /login?next=%2Fdashboard, (2) Auth flow - registration with unique user (sarah.chen+g9ftfvw6@techcorp.io) successful, redirected to dashboard, (3) Upload flow - PDF/DOCX/TXT file input working, chunked upload with progress UI visible, document uploaded successfully and appears in library immediately, (4) Document library - uploaded document (enterprise-ai-guide.txt) visible with status badge (indexed), loading skeleton states working, (5) RAG chat - question asked ('What are the key features of enterprise AI solutions?'), assistant response received, conversation history persists after page refresh (7 messages total), (6) Theme toggle - light/dark mode switching works correctly (class changes from 'light' to 'dark'), consistent across all pages, (7) Responsive layout - all pages (landing, dashboard, upload, chat, documents) render correctly on mobile (390x844) and desktop (1920x1080), (8) Logout & re-auth - logout redirects to login, dashboard protected after logout, re-login successful with same credentials. Runtime check: 0 console errors, 13 warnings (non-critical), no hydration mismatches detected. All MVP flows working end-to-end with live Appwrite/Pinecone/Groq/HuggingFace integrations."
   - task: "Zustand auth store, theme provider, loading states and toasts"
     implemented: true
-    working: "NA"
+    working: true
     file: "stores/auth-store.ts, app/providers.tsx, app/loading.tsx, app/dashboard/loading.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -168,14 +174,21 @@ frontend:
       - working: true
         agent: "testing"
         comment: "Zustand auth store and theme provider tested and verified working. Auth persistence confirmed: (1) Login state persists across page refreshes via localStorage (knowledge-iq-auth) and cookie (rag_scaffold_session), (2) Cookie sync working - auth cookie set on login with 7-day expiration, cleared on logout, (3) Theme provider working - next-themes integration functional, theme toggle switches between light/dark modes with proper HTML class and style attribute updates, (4) Toast notifications observed during auth flows (success messages on login/register/logout). Auth state management is robust and production-ready for MVP."
+      - working: "NA"
+        agent: "main"
+        comment: "Applied hydration fix for theme/toaster mount mismatch and switched auth flows to live Appwrite-backed sessions. Requesting UI regression smoke test."
+      - working: true
+        agent: "testing"
+        comment: "Live integration verification completed successfully. All state management and UX features working: (1) Zustand auth store - login/logout state persists correctly via localStorage (knowledge-iq-auth) and cookie (rag_scaffold_session), auth state survives page refresh, (2) Theme provider - next-themes integration working with hydration safety, theme toggle switches between light/dark modes correctly (HTML class changes observed: 'light' ↔ 'dark'), theme consistency maintained across all pages (landing, login, dashboard routes), (3) Loading states - skeleton loaders visible during document fetch on /dashboard/documents page, upload progress UI displays during chunked upload with real-time percentage updates, (4) Toast notifications - success toasts observed during auth flows (registration, login, logout) and upload completion. No hydration mismatch errors detected (0 console errors, 13 non-critical warnings). All UX state management features production-ready."
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 8
-  run_ui: false
+  test_sequence: 10
+  run_ui: true
 test_plan:
   current_focus:
-    - "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
+    - "Enterprise dashboard shell + page architecture + protected routes"
+    - "Zustand auth store, theme provider, loading states and toasts"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -204,3 +217,7 @@ agent_communication:
     message: "Backend retest after fixes: 11/17 tests passed (64.7%). ✅ NO REGRESSION: Auth flows (register/login/validation), health endpoint, protected routes, chunked upload init/chunk, all validation endpoints working. ❌ CRITICAL BLOCKER PERSISTS: Appwrite createIntegerAttribute('chunkCount') fails with 'Invalid default param: Value must be a valid signed 64-bit integer or null'. TESTING AGENT APPLIED FIXES: (1) ✅ Fixed HuggingFace endpoint - added missing '/pipeline/feature-extraction' path to router.huggingface.co URL, (2) ❌ Attempted Appwrite schema fix - corrected positional parameter order and tried undefined for default, but error persists. ROOT CAUSE: Positional parameter format incompatible with node-appwrite SDK. Current: createIntegerAttribute(db, collectionId, 'chunkCount', false, 0, 100000, undefined, false) → still throws validation error. SOLUTION NEEDED: Use object parameter format: createIntegerAttribute({databaseId, collectionId, key: 'chunkCount', required: false, min: 0, max: 100000, array: false}) and omit default entirely. BLOCKED FLOWS: Upload complete (500), document list (500), chat ask (500), chat history (500), document delete (untestable). Main agent must fix Appwrite schema creation to unblock RAG pipeline."
   - agent: "testing"
     message: "Final backend verification completed successfully: 17/17 tests passed (100% pass rate). ✅ ALL CRITICAL FLOWS VERIFIED: (1) Health endpoint returns all integration flags (appwrite, pinecone, groq, huggingFace all true), (2-5) Complete auth flow (register/login with validation and proper 400/401 error handling), (6-7) Auth guard protection working (401 without auth, 200 with auth cookie), (8-10) Full chunked upload cycle (init → chunk → complete) working end-to-end, (11) Document listing returns uploaded records, (12-15) RAG chat flow (ask with live-rag answer + sources, history persistence with user+assistant messages, proper validation), (16) Document deletion removes from storage and database, (17) All validation endpoints return proper 400 errors. Main agent successfully resolved Appwrite schema creation issues. Complete RAG pipeline verified: file upload → text extraction → chunking → HuggingFace embeddings → Pinecone vector indexing → Groq answer generation → Appwrite conversation persistence. Zero blockers remain. Backend is production-ready."
+  - agent: "main"
+    message: "User requested frontend smoke tests for live integrations: verify PDF/DOCX/TXT upload UX + chunk progress, chat persistence/history, protected redirects, hydration/runtime stability, dark/light consistency, responsive behavior, immediate document list updates, and loading/toast states."
+  - agent: "testing"
+    message: "Live integration frontend smoke testing completed successfully with 100% pass rate (8/8 test suites). ✅ ALL MVP SCENARIOS VERIFIED: (1) Auth + protection - unauthenticated /dashboard correctly redirects to /login?next=%2Fdashboard, registration flow works (test user: sarah.chen+g9ftfvw6@techcorp.io), dashboard opens after auth, (2) Upload UI + flow - file input accepts PDF/DOCX/TXT (.pdf,.docx,.txt,.md,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document), chunked upload progress UI visible and updates during upload, uploaded file (enterprise-ai-guide.txt) appears in document library immediately with 'indexed' status badge, (3) RAG chat - question asked ('What are the key features of enterprise AI solutions?'), assistant response received successfully, conversation history persists after page refresh (7 messages total including default assistant greeting), (4) Theme/hydration/runtime - dark/light mode toggle works correctly (HTML class changes: 'light' ↔ 'dark'), theme consistency maintained across landing/login/dashboard pages, ZERO console errors detected, 13 non-critical warnings, no hydration mismatch errors, (5) Responsive - all pages (landing, dashboard, upload, chat, documents) render correctly on desktop (1920x1080) and mobile (390x844) viewports, (6) UX state checks - loading skeleton states visible during document fetch, upload progress UI shows real-time percentage updates, toast notifications working for auth flows (register/login/logout) and upload completion, (7) Logout & re-auth - logout redirects to login, dashboard protected after logout, re-login successful with same credentials. Complete end-to-end RAG pipeline working with live Appwrite/Pinecone/Groq/HuggingFace integrations. MVP is production-ready."
