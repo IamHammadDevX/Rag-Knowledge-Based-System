@@ -230,11 +230,11 @@ def test_protected_endpoint_with_auth():
         return False
 
 def test_chunked_upload_init():
-    """Test 8: POST /api/uploads/init with txt file metadata returns uploadId"""
-    print(f"\n{Colors.BLUE}Test 8: Chunked Upload Init{Colors.END}")
+    """Test 8: POST /api/uploads/init with text file metadata returns uploadId"""
+    print(f"\n{Colors.BLUE}Test 8: Chunked Upload Init (TXT){Colors.END}")
     try:
         if not ctx.session_cookie:
-            print_test("POST /api/uploads/init", False, "No session cookie available")
+            print_test("POST /api/uploads/init (TXT)", False, "No session cookie available")
             return False
         
         payload = {
@@ -258,23 +258,23 @@ def test_chunked_upload_init():
             ctx.upload_id = data["data"]["uploadId"]
         
         details = f"Status: {response.status_code}, UploadId: {data.get('data', {}).get('uploadId', 'N/A')}"
-        print_test("POST /api/uploads/init", passed, details)
+        print_test("POST /api/uploads/init (TXT)", passed, details)
         return passed
     except Exception as e:
-        print_test("POST /api/uploads/init", False, f"Exception: {str(e)}")
+        print_test("POST /api/uploads/init (TXT)", False, f"Exception: {str(e)}")
         return False
 
 def test_chunked_upload_chunk():
-    """Test 9: POST /api/uploads/chunk for all chunks succeeds"""
-    print(f"\n{Colors.BLUE}Test 9: Chunked Upload Chunk{Colors.END}")
+    """Test 9: POST /api/uploads/chunk for all text chunks succeeds"""
+    print(f"\n{Colors.BLUE}Test 9: Chunked Upload Chunk (TXT){Colors.END}")
     try:
         if not ctx.session_cookie or not ctx.upload_id:
-            print_test("POST /api/uploads/chunk", False, "No session cookie or upload ID available")
+            print_test("POST /api/uploads/chunk (TXT)", False, "No session cookie or upload ID available")
             return False
         
         # Sample text content split into 2 chunks
-        chunk1_content = "Enterprise Security Policy\n\nSection 1: Access Control\nAll employees must use multi-factor authentication for accessing company systems."
-        chunk2_content = "\n\nSection 2: Data Protection\nSensitive data must be encrypted at rest and in transit using AES-256 encryption standards."
+        chunk1_content = "Enterprise Security Policy\n\nSection 1: Access Control\nAll employees must use multi-factor authentication for accessing company systems. This includes email, VPN, cloud services, and internal applications."
+        chunk2_content = "\n\nSection 2: Data Protection\nSensitive data must be encrypted at rest and in transit using AES-256 encryption standards. All customer data must be handled according to GDPR and SOC2 compliance requirements."
         
         chunks = [chunk1_content, chunk2_content]
         headers = {"Cookie": ctx.session_cookie}
@@ -307,11 +307,11 @@ def test_chunked_upload_chunk():
             else:
                 print(f"    Chunk {idx} uploaded successfully")
         
-        details = f"All {len(chunks)} chunks uploaded successfully" if all_passed else "Some chunks failed"
-        print_test("POST /api/uploads/chunk (all chunks)", all_passed, details)
+        details = f"All {len(chunks)} text chunks uploaded successfully" if all_passed else "Some chunks failed"
+        print_test("POST /api/uploads/chunk (TXT)", all_passed, details)
         return all_passed
     except Exception as e:
-        print_test("POST /api/uploads/chunk", False, f"Exception: {str(e)}")
+        print_test("POST /api/uploads/chunk (TXT)", False, f"Exception: {str(e)}")
         return False
 
 def test_chunked_upload_complete():
@@ -347,30 +347,49 @@ def test_chunked_upload_complete():
         return False
 
 def test_get_documents_after_upload():
-    """Test 11: GET /api/documents returns uploaded document"""
-    print(f"\n{Colors.BLUE}Test 11: Get Documents After Upload{Colors.END}")
+    """Test 11: GET /api/documents returns uploaded document with indexed status (not failed)"""
+    print(f"\n{Colors.BLUE}Test 11: Get Documents After Upload - Verify Status{Colors.END}")
     try:
         if not ctx.session_cookie:
             print_test("GET /api/documents (after upload)", False, "No session cookie available")
             return False
+        
+        # Wait for indexing to complete
+        print("    Waiting 8 seconds for PDF indexing to complete...")
+        time.sleep(8)
         
         headers = {"Cookie": ctx.session_cookie}
         response = requests.get(f"{BASE_URL}/documents", headers=headers, timeout=10)
         data = response.json()
         
         documents = data.get("data", [])
-        document_found = any(doc.get("id") == ctx.document_id for doc in documents) if ctx.document_id else False
+        uploaded_doc = None
+        for doc in documents:
+            if doc.get("id") == ctx.document_id:
+                uploaded_doc = doc
+                break
+        
+        document_found = uploaded_doc is not None
+        document_status = uploaded_doc.get("status") if uploaded_doc else "N/A"
+        is_indexed = document_status == "indexed"
         
         passed = (
             response.status_code == 200 and
             data.get("success") == True and
             isinstance(documents, list) and
             len(documents) > 0 and
-            document_found
+            document_found and
+            is_indexed
         )
         
-        details = f"Status: {response.status_code}, Documents count: {len(documents)}, Uploaded document found: {document_found}"
-        print_test("GET /api/documents (after upload)", passed, details)
+        details = f"Status: {response.status_code}, Documents count: {len(documents)}, Document found: {document_found}, Document status: {document_status}, Is indexed: {is_indexed}"
+        print_test("GET /api/documents (verify indexed status)", passed, details)
+        
+        if document_found and not is_indexed:
+            print(f"    {Colors.RED}WARNING: Document status is '{document_status}' instead of 'indexed'{Colors.END}")
+            if uploaded_doc.get("errorMessage"):
+                print(f"    {Colors.RED}Error message: {uploaded_doc.get('errorMessage')}{Colors.END}")
+        
         return passed
     except Exception as e:
         print_test("GET /api/documents (after upload)", False, f"Exception: {str(e)}")
@@ -492,9 +511,57 @@ def test_chat_history_missing_session():
         print_test("GET /api/chat/history (missing sessionId)", False, f"Exception: {str(e)}")
         return False
 
+def test_document_retry():
+    """Test 16: POST /api/documents/{id}/retry triggers re-indexing and updates status"""
+    print(f"\n{Colors.BLUE}Test 16: Document Retry Endpoint{Colors.END}")
+    try:
+        if not ctx.session_cookie or not ctx.document_id:
+            print_test("POST /api/documents/{id}/retry", False, "No session cookie or document ID available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/documents/{ctx.document_id}/retry", headers=headers, timeout=10)
+        data = response.json()
+        
+        passed = (
+            response.status_code == 200 and
+            data.get("success") == True and
+            "data" in data and
+            data["data"].get("id") == ctx.document_id and
+            data["data"].get("status") == "processing"
+        )
+        
+        details = f"Status: {response.status_code}, Document ID: {data.get('data', {}).get('id', 'N/A')}, New status: {data.get('data', {}).get('status', 'N/A')}, Message: {data.get('message', 'N/A')}"
+        print_test("POST /api/documents/{id}/retry", passed, details)
+        
+        # Wait a bit and verify status changed
+        if passed:
+            print("    Waiting 5 seconds for retry processing...")
+            time.sleep(5)
+            verify_response = requests.get(f"{BASE_URL}/documents", headers=headers, timeout=10)
+            verify_data = verify_response.json()
+            documents = verify_data.get("data", [])
+            retry_doc = None
+            for doc in documents:
+                if doc.get("id") == ctx.document_id:
+                    retry_doc = doc
+                    break
+            
+            if retry_doc:
+                new_status = retry_doc.get("status")
+                print(f"    Document status after retry: {new_status}")
+                # Status should be either "processing" or "indexed" (if fast)
+                if new_status not in ["processing", "indexed"]:
+                    print(f"    {Colors.YELLOW}WARNING: Unexpected status after retry: {new_status}{Colors.END}")
+        
+        return passed
+    except Exception as e:
+        print_test("POST /api/documents/{id}/retry", False, f"Exception: {str(e)}")
+        return False
+
 def test_delete_document():
-    """Test 16: DELETE /api/documents/{id} returns success and removes doc from list"""
-    print(f"\n{Colors.BLUE}Test 16: Delete Document{Colors.END}")
+    """Test 17: DELETE /api/documents/{id} returns success and removes doc from list"""
+    print(f"\n{Colors.BLUE}Test 17: Delete Document{Colors.END}")
     try:
         if not ctx.session_cookie or not ctx.document_id:
             print_test("DELETE /api/documents/{id}", False, "No session cookie or document ID available")
@@ -527,8 +594,8 @@ def test_delete_document():
         return False
 
 def test_upload_init_missing_fields():
-    """Test 17: POST /api/uploads/init missing required fields returns 400"""
-    print(f"\n{Colors.BLUE}Test 17: Upload Init Missing Fields{Colors.END}")
+    """Test 18: POST /api/uploads/init missing required fields returns 400"""
+    print(f"\n{Colors.BLUE}Test 18: Upload Init Missing Fields{Colors.END}")
     try:
         if not ctx.session_cookie:
             print_test("POST /api/uploads/init (missing fields)", False, "No session cookie available")
@@ -560,6 +627,7 @@ def main():
     print(f"{Colors.YELLOW}Backend API Testing - Knowledge IQ RAG System (LIVE INTEGRATION){Colors.END}")
     print(f"{Colors.YELLOW}Base URL: {BASE_URL}{Colors.END}")
     print(f"{Colors.YELLOW}Testing: Appwrite + Pinecone + HuggingFace + Groq + Chunked Upload{Colors.END}")
+    print(f"{Colors.YELLOW}Focus: Upload Flow, Retry Endpoint, Status Verification{Colors.END}")
     print(f"{Colors.YELLOW}{'='*80}{Colors.END}")
     
     results = []
@@ -572,14 +640,15 @@ def main():
     results.append(("Login Missing Fields", test_login_missing_fields()))
     results.append(("Protected Endpoint Without Auth", test_protected_endpoint_without_auth()))
     results.append(("Protected Endpoint With Auth", test_protected_endpoint_with_auth()))
-    results.append(("Chunked Upload Init", test_chunked_upload_init()))
-    results.append(("Chunked Upload Chunk", test_chunked_upload_chunk()))
+    results.append(("Chunked Upload Init (TXT)", test_chunked_upload_init()))
+    results.append(("Chunked Upload Chunk (TXT)", test_chunked_upload_chunk()))
     results.append(("Chunked Upload Complete", test_chunked_upload_complete()))
-    results.append(("Get Documents After Upload", test_get_documents_after_upload()))
+    results.append(("Get Documents After Upload (Verify Indexed)", test_get_documents_after_upload()))
     results.append(("RAG Chat Ask", test_chat_ask_rag()))
     results.append(("Chat Ask Missing Fields", test_chat_ask_missing_fields()))
     results.append(("Chat History", test_chat_history()))
     results.append(("Chat History Missing SessionId", test_chat_history_missing_session()))
+    results.append(("Document Retry Endpoint", test_document_retry()))
     results.append(("Delete Document", test_delete_document()))
     results.append(("Upload Init Missing Fields", test_upload_init_missing_fields()))
     

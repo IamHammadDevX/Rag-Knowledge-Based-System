@@ -147,6 +147,22 @@ export const listKnowledgeDocuments = async (userId: string) => {
   return list.documents.map(mapDocument);
 };
 
+export const getKnowledgeDocumentById = async (documentId: string, userId: string) => {
+  await ensureAppwriteSchema();
+
+  const document = await appwriteDatabases.getDocument(
+    appwriteConfig.databaseId,
+    appwriteConfig.documentsCollectionId,
+    documentId
+  );
+
+  if (document.userId !== userId) {
+    throw new Error("Unauthorized to access this document.");
+  }
+
+  return mapDocument(document);
+};
+
 export const deleteKnowledgeDocument = async (documentId: string, userId: string) => {
   await ensureAppwriteSchema();
 

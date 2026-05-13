@@ -9,6 +9,12 @@ export async function getDocuments() {
   });
 }
 
+export async function retryDocument(id: string) {
+  return apiClient<{ id: string; status: string }>(`${API_ROUTES.documents}/${id}/retry`, {
+    method: "POST",
+  });
+}
+
 export async function deleteDocument(id: string) {
   return apiClient<{ id: string }>(`${API_ROUTES.documents}/${id}`, {
     method: "DELETE",

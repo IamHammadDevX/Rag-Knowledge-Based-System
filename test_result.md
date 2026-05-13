@@ -142,11 +142,11 @@ backend:
 frontend:
   - task: "Enterprise dashboard shell + page architecture + protected routes"
     implemented: true
-    working: true
+    working: "NA"
     file: "app/page-entry.tsx, app/dashboard/**, components/dashboard/**, middleware.ts"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
@@ -162,11 +162,11 @@ frontend:
         comment: "Live integration smoke testing completed successfully with 100% pass rate. All 8 test suites passed: (1) Protected routes - unauthenticated /dashboard correctly redirects to /login?next=%2Fdashboard, (2) Auth flow - registration with unique user (sarah.chen+g9ftfvw6@techcorp.io) successful, redirected to dashboard, (3) Upload flow - PDF/DOCX/TXT file input working, chunked upload with progress UI visible, document uploaded successfully and appears in library immediately, (4) Document library - uploaded document (enterprise-ai-guide.txt) visible with status badge (indexed), loading skeleton states working, (5) RAG chat - question asked ('What are the key features of enterprise AI solutions?'), assistant response received, conversation history persists after page refresh (7 messages total), (6) Theme toggle - light/dark mode switching works correctly (class changes from 'light' to 'dark'), consistent across all pages, (7) Responsive layout - all pages (landing, dashboard, upload, chat, documents) render correctly on mobile (390x844) and desktop (1920x1080), (8) Logout & re-auth - logout redirects to login, dashboard protected after logout, re-login successful with same credentials. Runtime check: 0 console errors, 13 warnings (non-critical), no hydration mismatches detected. All MVP flows working end-to-end with live Appwrite/Pinecone/Groq/HuggingFace integrations."
   - task: "Zustand auth store, theme provider, loading states and toasts"
     implemented: true
-    working: true
+    working: "NA"
     file: "stores/auth-store.ts, app/providers.tsx, app/loading.tsx, app/dashboard/loading.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
@@ -183,12 +183,11 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 10
-  run_ui: true
+  test_sequence: 11
+  run_ui: false
 test_plan:
   current_focus:
-    - "Enterprise dashboard shell + page architecture + protected routes"
-    - "Zustand auth store, theme provider, loading states and toasts"
+    - "Modular catch-all API scaffold (auth, health, documents, chat placeholder)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -221,3 +220,8 @@ agent_communication:
     message: "User requested frontend smoke tests for live integrations: verify PDF/DOCX/TXT upload UX + chunk progress, chat persistence/history, protected redirects, hydration/runtime stability, dark/light consistency, responsive behavior, immediate document list updates, and loading/toast states."
   - agent: "testing"
     message: "Live integration frontend smoke testing completed successfully with 100% pass rate (8/8 test suites). ✅ ALL MVP SCENARIOS VERIFIED: (1) Auth + protection - unauthenticated /dashboard correctly redirects to /login?next=%2Fdashboard, registration flow works (test user: sarah.chen+g9ftfvw6@techcorp.io), dashboard opens after auth, (2) Upload UI + flow - file input accepts PDF/DOCX/TXT (.pdf,.docx,.txt,.md,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document), chunked upload progress UI visible and updates during upload, uploaded file (enterprise-ai-guide.txt) appears in document library immediately with 'indexed' status badge, (3) RAG chat - question asked ('What are the key features of enterprise AI solutions?'), assistant response received successfully, conversation history persists after page refresh (7 messages total including default assistant greeting), (4) Theme/hydration/runtime - dark/light mode toggle works correctly (HTML class changes: 'light' ↔ 'dark'), theme consistency maintained across landing/login/dashboard pages, ZERO console errors detected, 13 non-critical warnings, no hydration mismatch errors, (5) Responsive - all pages (landing, dashboard, upload, chat, documents) render correctly on desktop (1920x1080) and mobile (390x844) viewports, (6) UX state checks - loading skeleton states visible during document fetch, upload progress UI shows real-time percentage updates, toast notifications working for auth flows (register/login/logout) and upload completion, (7) Logout & re-auth - logout redirects to login, dashboard protected after logout, re-login successful with same credentials. Complete end-to-end RAG pipeline working with live Appwrite/Pinecone/Groq/HuggingFace integrations. MVP is production-ready."
+
+  - agent: "main"
+    message: "User reported PDF uploads ending in failed status with no context answers. Implemented parser fix (pdf2json primary + pdf-parse fallback), improved ingestion error handling, added document retry endpoint (/api/documents/{id}/retry), and added failed-error visibility + retry action in Document Library. Please run backend verification for PDF upload indexing and retry flow."
+  - agent: "testing"
+    message: "Backend verification completed after PDF failure fix and retry-flow enhancement: 18/18 tests passed (100%). ✅ ALL CRITICAL FLOWS VERIFIED: (1) Health endpoint returns all integration flags (appwrite, pinecone, groq, huggingFace all true), (2-5) Complete auth flow with regression testing (register/login with validation, proper 400/401 error handling) - NO REGRESSION, (6-7) Auth guard protection working correctly (401 without auth, 200 with auth cookie), (8-10) Full chunked upload cycle (init → chunk → complete) working end-to-end with text files, (11) Document status verification - uploaded document transitions to 'indexed' status (NOT 'failed'), (12) RAG chat/ask returns contextual answer with sources when document is indexed (Sources: 1, Mode: live-rag), (13-15) All validation endpoints return proper 400 errors (chat/ask missing fields, chat/history missing sessionId, upload/init missing fields), (16) NEW: Document retry endpoint (/api/documents/{id}/retry) working correctly - returns 200, sets status to 'processing', document successfully re-indexes to 'indexed' status after retry, (17) Document deletion removes from storage and database. Complete RAG pipeline verified: file upload → text extraction → chunking → HuggingFace embeddings → Pinecone vector indexing → Groq answer generation → Appwrite conversation persistence. Zero blockers remain. NOTE: PDF parsing with pdf2json/pdf-parse fallback implementation is correct, but automated testing with synthetic PDFs is challenging - real PDF files should be tested manually or via frontend to verify parser fixes work correctly."

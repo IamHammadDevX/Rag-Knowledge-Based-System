@@ -10,7 +10,7 @@ import {
 import { deleteFileFromAppwriteStorage } from "@/lib/server/integrations/appwrite-storage";
 import { answerQuestionWithRag } from "@/lib/server/rag/retrieval";
 import { completeChunkedUpload, initChunkedUpload, storeUploadChunk } from "@/lib/server/uploads/chunked-upload";
-import { createAndIngestDocument } from "@/lib/server/rag/ingestion";
+import { createAndIngestDocument, retryDocumentIngestion } from "@/lib/server/rag/ingestion";
 import { deleteVectorsByDocument } from "@/lib/server/integrations/pinecone";
 import { NextResponse } from "next/server";
 
@@ -151,6 +151,21 @@ async function handleRequest(request: Request, context: RouteContext) {
       const user = requireSessionUser(request);
       const documents = await listKnowledgeDocuments(user.id);
       return json({ success: true, data: documents });
+    }
+
+    if (route.match(/^\/documents\/[^/]+\/retry$/) && method === "POST") {
+      const user = requireSessionUser(request);
+      const documentId = route.replace("/documents/", "").replace("/retry", "");
+      const result = await retryDocumentIngestion({
+        documentId,
+        userId: user.id,
+      });
+
+      return json({
+        success: true,
+        data: result,
+        message: "Document re-indexing started.",
+      });
     }
 
     if (route.startsWith("/documents/") && method === "DELETE") {

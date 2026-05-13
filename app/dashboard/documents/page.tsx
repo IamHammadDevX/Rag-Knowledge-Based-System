@@ -2,27 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { RefreshCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { deleteDocument, getDocuments } from "@/lib/api/documents";
+import { deleteDocument, getDocuments, retryDocument } from "@/lib/api/documents";
 import { KnowledgeDocument } from "@/types/documents";
 
 function App() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  const loadDocuments = async () => {
-    setLoading(true);
+  const loadDocuments = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
+
     try {
       const response = await getDocuments();
       setDocuments(response.data ?? []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load documents");
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -32,6 +38,22 @@ function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const hasProcessing = documents.some((doc) => doc.status === "processing");
+
+    if (!hasProcessing) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      loadDocuments(true).catch(() => {
+        // no-op
+      });
+    }, 3500);
+
+    return () => clearInterval(intervalId);
+  }, [documents]);
+
   const handleDelete = async (id: string) => {
     try {
       await deleteDocument(id);
@@ -39,6 +61,20 @@ function App() {
       setDocuments((previous) => previous.filter((item) => item.id !== id));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
+    }
+  };
+
+  const handleRetry = async (id: string) => {
+    setRetryingId(id);
+
+    try {
+      await retryDocument(id);
+      toast.success("Re-indexing started. Status will update shortly.");
+      await loadDocuments(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Retry failed");
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -65,16 +101,29 @@ function App() {
           ) : (
             <div className="space-y-2">
               {documents.map((doc) => (
-                <div key={doc.id} className="flex flex-col gap-2 rounded-xl border bg-background/70 p-3 md:flex-row md:items-center md:justify-between">
+                <div key={doc.id} className="flex flex-col gap-3 rounded-xl border bg-background/70 p-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium">{doc.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {doc.type} • {Math.round(doc.size / 1024)} KB • {new Date(doc.createdAt).toLocaleString()}
                     </p>
+                    {doc.status === "failed" && doc.errorMessage ? (
+                      <p className="mt-1 text-xs text-destructive">Error: {doc.errorMessage}</p>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Badge variant={doc.status === "indexed" ? "default" : "secondary"}>{doc.status}</Badge>
+                    {doc.status === "failed" ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleRetry(doc.id)}
+                        disabled={retryingId === doc.id}
+                      >
+                        <RefreshCcw className={`mr-2 h-4 w-4 ${retryingId === doc.id ? "animate-spin" : ""}`} />
+                        Retry
+                      </Button>
+                    ) : null}
                     <Button variant="outline" size="icon" onClick={() => handleDelete(doc.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
