@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Backend API Testing Script for Knowledge IQ RAG System
-Tests all backend endpoints according to test_result.md protocol
+Backend API Testing Script for Knowledge IQ RAG System - LIVE INTEGRATION
+Tests all backend endpoints with Appwrite, Pinecone, HuggingFace, Groq integrations
 """
 
 import requests
 import json
 import sys
-from typing import Dict, Any
+import time
+import uuid
+from typing import Dict, Any, Optional
 
 # Base URL from environment
 BASE_URL = "https://rag-intelligence-1.preview.emergentagent.com/api"
@@ -19,6 +21,18 @@ class Colors:
     BLUE = '\033[94m'
     END = '\033[0m'
 
+class TestContext:
+    """Store test context data across tests"""
+    def __init__(self):
+        self.session_token: Optional[str] = None
+        self.session_cookie: Optional[str] = None
+        self.user_email: Optional[str] = None
+        self.upload_id: Optional[str] = None
+        self.document_id: Optional[str] = None
+        self.session_id: str = f"test-session-{uuid.uuid4()}"
+
+ctx = TestContext()
+
 def print_test(test_name: str, passed: bool, details: str = ""):
     status = f"{Colors.GREEN}✅ PASS{Colors.END}" if passed else f"{Colors.RED}❌ FAIL{Colors.END}"
     print(f"{status} - {test_name}")
@@ -26,21 +40,24 @@ def print_test(test_name: str, passed: bool, details: str = ""):
         print(f"    {details}")
 
 def test_health_endpoint():
-    """Test 1: GET /api/health returns success true and integration readiness payload"""
-    print(f"\n{Colors.BLUE}Test 1: Health Endpoint{Colors.END}")
+    """Test 1: GET /api/health returns integration flags and success true"""
+    print(f"\n{Colors.BLUE}Test 1: Health Endpoint with Integration Flags{Colors.END}")
     try:
         response = requests.get(f"{BASE_URL}/health", timeout=10)
         data = response.json()
         
+        integrations = data.get("data", {}).get("integrations", {})
         passed = (
             response.status_code == 200 and
             data.get("success") == True and
-            "data" in data and
-            "integrations" in data["data"] and
-            "service" in data["data"]
+            "integrations" in data.get("data", {}) and
+            "appwrite" in integrations and
+            "pinecone" in integrations and
+            "groq" in integrations and
+            "huggingFace" in integrations
         )
         
-        details = f"Status: {response.status_code}, Response: {json.dumps(data, indent=2)}"
+        details = f"Status: {response.status_code}, Integrations: appwrite={integrations.get('appwrite')}, pinecone={integrations.get('pinecone')}, groq={integrations.get('groq')}, huggingFace={integrations.get('huggingFace')}"
         print_test("GET /api/health", passed, details)
         return passed
     except Exception as e:
@@ -48,13 +65,15 @@ def test_health_endpoint():
         return False
 
 def test_register_valid():
-    """Test 2: POST /api/auth/register with valid payload creates user + sessionToken"""
-    print(f"\n{Colors.BLUE}Test 2: Register with Valid Payload{Colors.END}")
+    """Test 2: POST /api/auth/register with unique email works and returns user + sessionToken"""
+    print(f"\n{Colors.BLUE}Test 2: Register with Valid Unique Email{Colors.END}")
     try:
+        # Use timestamp to ensure unique email
+        unique_email = f"testuser_{int(time.time())}@knowledgeiq.com"
         payload = {
-            "email": "alice.johnson@knowledgeiq.com",
+            "email": unique_email,
             "password": "SecurePass123!",
-            "name": "Alice Johnson"
+            "name": "Test User"
         }
         response = requests.post(f"{BASE_URL}/auth/register", json=payload, timeout=10)
         data = response.json()
@@ -65,10 +84,19 @@ def test_register_valid():
             "data" in data and
             "user" in data["data"] and
             "sessionToken" in data["data"] and
-            data["data"]["user"]["email"] == payload["email"]
+            data["data"]["user"]["email"] == unique_email
         )
         
-        details = f"Status: {response.status_code}, User: {data.get('data', {}).get('user', {}).get('email')}, Token: {'Present' if data.get('data', {}).get('sessionToken') else 'Missing'}"
+        # Store session token and cookie for subsequent tests
+        if passed:
+            ctx.session_token = data["data"]["sessionToken"]
+            ctx.user_email = unique_email
+            # Extract cookie from response headers
+            set_cookie = response.headers.get("Set-Cookie", "")
+            if "rag_scaffold_session=" in set_cookie:
+                ctx.session_cookie = set_cookie.split(";")[0]
+        
+        details = f"Status: {response.status_code}, Email: {unique_email}, Token: {'Present' if data.get('data', {}).get('sessionToken') else 'Missing'}, Cookie: {'Present' if ctx.session_cookie else 'Missing'}"
         print_test("POST /api/auth/register (valid)", passed, details)
         return passed
     except Exception as e:
@@ -100,21 +128,16 @@ def test_register_missing_fields():
         return False
 
 def test_login_valid():
-    """Test 4: POST /api/auth/login with valid payload returns user + sessionToken"""
-    print(f"\n{Colors.BLUE}Test 4: Login with Valid Payload{Colors.END}")
+    """Test 4: POST /api/auth/login with same credentials works"""
+    print(f"\n{Colors.BLUE}Test 4: Login with Valid Credentials{Colors.END}")
     try:
-        # First register a user
-        register_payload = {
-            "email": "bob.smith@knowledgeiq.com",
-            "password": "BobSecure456!",
-            "name": "Bob Smith"
-        }
-        requests.post(f"{BASE_URL}/auth/register", json=register_payload, timeout=10)
+        if not ctx.user_email:
+            print_test("POST /api/auth/login (valid)", False, "No user email from registration")
+            return False
         
-        # Now login
         login_payload = {
-            "email": "bob.smith@knowledgeiq.com",
-            "password": "BobSecure456!"
+            "email": ctx.user_email,
+            "password": "SecurePass123!"
         }
         response = requests.post(f"{BASE_URL}/auth/login", json=login_payload, timeout=10)
         data = response.json()
@@ -125,10 +148,10 @@ def test_login_valid():
             "data" in data and
             "user" in data["data"] and
             "sessionToken" in data["data"] and
-            data["data"]["user"]["email"] == login_payload["email"]
+            data["data"]["user"]["email"] == ctx.user_email
         )
         
-        details = f"Status: {response.status_code}, User: {data.get('data', {}).get('user', {}).get('email')}, Token: {'Present' if data.get('data', {}).get('sessionToken') else 'Missing'}"
+        details = f"Status: {response.status_code}, Email: {ctx.user_email}, Token: {'Present' if data.get('data', {}).get('sessionToken') else 'Missing'}"
         print_test("POST /api/auth/login (valid)", passed, details)
         return passed
     except Exception as e:
@@ -159,11 +182,37 @@ def test_login_missing_fields():
         print_test("POST /api/auth/login (missing fields)", False, f"Exception: {str(e)}")
         return False
 
-def test_get_documents():
-    """Test 6: GET /api/documents returns array"""
-    print(f"\n{Colors.BLUE}Test 6: Get Documents{Colors.END}")
+def test_protected_endpoint_without_auth():
+    """Test 6: Verify auth-protected endpoints reject without cookie/token"""
+    print(f"\n{Colors.BLUE}Test 6: Protected Endpoint Without Auth{Colors.END}")
     try:
+        # Try to access documents without auth
         response = requests.get(f"{BASE_URL}/documents", timeout=10)
+        data = response.json()
+        
+        passed = (
+            response.status_code == 401 and
+            data.get("success") == False and
+            "error" in data
+        )
+        
+        details = f"Status: {response.status_code}, Error: {data.get('error', 'No error message')}"
+        print_test("GET /api/documents (no auth)", passed, details)
+        return passed
+    except Exception as e:
+        print_test("GET /api/documents (no auth)", False, f"Exception: {str(e)}")
+        return False
+
+def test_protected_endpoint_with_auth():
+    """Test 7: Verify auth-protected endpoints succeed with auth cookie"""
+    print(f"\n{Colors.BLUE}Test 7: Protected Endpoint With Auth{Colors.END}")
+    try:
+        if not ctx.session_cookie:
+            print_test("GET /api/documents (with auth)", False, "No session cookie available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.get(f"{BASE_URL}/documents", headers=headers, timeout=10)
         data = response.json()
         
         passed = (
@@ -174,143 +223,208 @@ def test_get_documents():
         )
         
         details = f"Status: {response.status_code}, Documents count: {len(data.get('data', []))}"
-        print_test("GET /api/documents", passed, details)
+        print_test("GET /api/documents (with auth)", passed, details)
         return passed
     except Exception as e:
-        print_test("GET /api/documents", False, f"Exception: {str(e)}")
+        print_test("GET /api/documents (with auth)", False, f"Exception: {str(e)}")
         return False
 
-def test_create_document_valid():
-    """Test 7: POST /api/documents valid metadata creates document"""
-    print(f"\n{Colors.BLUE}Test 7: Create Document with Valid Metadata{Colors.END}")
+def test_chunked_upload_init():
+    """Test 8: POST /api/uploads/init with txt file metadata returns uploadId"""
+    print(f"\n{Colors.BLUE}Test 8: Chunked Upload Init{Colors.END}")
     try:
+        if not ctx.session_cookie:
+            print_test("POST /api/uploads/init", False, "No session cookie available")
+            return False
+        
         payload = {
-            "name": "Q4 Financial Report.pdf",
-            "type": "application/pdf",
-            "size": 1500000,
-            "uploadedBy": "carol.white@knowledgeiq.com"
+            "fileName": "enterprise_security_policy.txt",
+            "mimeType": "text/plain",
+            "fileSize": 5000,
+            "totalChunks": 2
         }
-        response = requests.post(f"{BASE_URL}/documents", json=payload, timeout=10)
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/uploads/init", json=payload, headers=headers, timeout=10)
         data = response.json()
         
         passed = (
             response.status_code == 200 and
             data.get("success") == True and
             "data" in data and
-            "id" in data["data"] and
-            data["data"]["name"] == payload["name"]
+            "uploadId" in data["data"]
         )
         
-        details = f"Status: {response.status_code}, Document ID: {data.get('data', {}).get('id', 'N/A')}, Name: {data.get('data', {}).get('name', 'N/A')}"
-        print_test("POST /api/documents (valid)", passed, details)
+        if passed:
+            ctx.upload_id = data["data"]["uploadId"]
         
-        # Store document ID for deletion test
-        if passed and "data" in data and "id" in data["data"]:
-            return passed, data["data"]["id"]
-        return passed, None
-    except Exception as e:
-        print_test("POST /api/documents (valid)", False, f"Exception: {str(e)}")
-        return False, None
-
-def test_create_document_missing_fields():
-    """Test 8: POST /api/documents missing required fields returns 400"""
-    print(f"\n{Colors.BLUE}Test 8: Create Document with Missing Fields{Colors.END}")
-    try:
-        payload = {
-            "name": "Incomplete Document.pdf"
-            # Missing type and uploadedBy
-        }
-        response = requests.post(f"{BASE_URL}/documents", json=payload, timeout=10)
-        data = response.json()
-        
-        passed = (
-            response.status_code == 400 and
-            data.get("success") == False and
-            "error" in data
-        )
-        
-        details = f"Status: {response.status_code}, Error: {data.get('error', 'No error message')}"
-        print_test("POST /api/documents (missing fields)", passed, details)
+        details = f"Status: {response.status_code}, UploadId: {data.get('data', {}).get('uploadId', 'N/A')}"
+        print_test("POST /api/uploads/init", passed, details)
         return passed
     except Exception as e:
-        print_test("POST /api/documents (missing fields)", False, f"Exception: {str(e)}")
+        print_test("POST /api/uploads/init", False, f"Exception: {str(e)}")
         return False
 
-def test_delete_document(document_id: str):
-    """Test 9: DELETE /api/documents/{id} removes document"""
-    print(f"\n{Colors.BLUE}Test 9: Delete Document{Colors.END}")
+def test_chunked_upload_chunk():
+    """Test 9: POST /api/uploads/chunk for all chunks succeeds"""
+    print(f"\n{Colors.BLUE}Test 9: Chunked Upload Chunk{Colors.END}")
     try:
-        response = requests.delete(f"{BASE_URL}/documents/{document_id}", timeout=10)
+        if not ctx.session_cookie or not ctx.upload_id:
+            print_test("POST /api/uploads/chunk", False, "No session cookie or upload ID available")
+            return False
+        
+        # Sample text content split into 2 chunks
+        chunk1_content = "Enterprise Security Policy\n\nSection 1: Access Control\nAll employees must use multi-factor authentication for accessing company systems."
+        chunk2_content = "\n\nSection 2: Data Protection\nSensitive data must be encrypted at rest and in transit using AES-256 encryption standards."
+        
+        chunks = [chunk1_content, chunk2_content]
+        headers = {"Cookie": ctx.session_cookie}
+        
+        all_passed = True
+        for idx, chunk_text in enumerate(chunks):
+            # Create form data with chunk
+            files = {
+                'chunk': ('chunk', chunk_text.encode('utf-8'), 'application/octet-stream')
+            }
+            data = {
+                'uploadId': ctx.upload_id,
+                'chunkIndex': str(idx)
+            }
+            
+            response = requests.post(f"{BASE_URL}/uploads/chunk", data=data, files=files, headers=headers, timeout=10)
+            response_data = response.json()
+            
+            chunk_passed = (
+                response.status_code == 200 and
+                response_data.get("success") == True and
+                "data" in response_data and
+                response_data["data"]["uploadId"] == ctx.upload_id and
+                response_data["data"]["chunkIndex"] == idx
+            )
+            
+            if not chunk_passed:
+                all_passed = False
+                print(f"    Chunk {idx} failed: Status {response.status_code}, Response: {response_data}")
+            else:
+                print(f"    Chunk {idx} uploaded successfully")
+        
+        details = f"All {len(chunks)} chunks uploaded successfully" if all_passed else "Some chunks failed"
+        print_test("POST /api/uploads/chunk (all chunks)", all_passed, details)
+        return all_passed
+    except Exception as e:
+        print_test("POST /api/uploads/chunk", False, f"Exception: {str(e)}")
+        return False
+
+def test_chunked_upload_complete():
+    """Test 10: POST /api/uploads/complete succeeds and returns created document object"""
+    print(f"\n{Colors.BLUE}Test 10: Chunked Upload Complete{Colors.END}")
+    try:
+        if not ctx.session_cookie or not ctx.upload_id:
+            print_test("POST /api/uploads/complete", False, "No session cookie or upload ID available")
+            return False
+        
+        payload = {
+            "uploadId": ctx.upload_id
+        }
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/uploads/complete", json=payload, headers=headers, timeout=30)
         data = response.json()
         
         passed = (
             response.status_code == 200 and
             data.get("success") == True and
             "data" in data and
-            data["data"]["id"] == document_id
+            "id" in data["data"]
         )
         
-        details = f"Status: {response.status_code}, Deleted ID: {data.get('data', {}).get('id', 'N/A')}"
-        print_test("DELETE /api/documents/{id}", passed, details)
+        if passed:
+            ctx.document_id = data["data"]["id"]
+        
+        details = f"Status: {response.status_code}, Document ID: {data.get('data', {}).get('id', 'N/A')}, Message: {data.get('message', 'N/A')}"
+        print_test("POST /api/uploads/complete", passed, details)
         return passed
     except Exception as e:
-        print_test("DELETE /api/documents/{id}", False, f"Exception: {str(e)}")
+        print_test("POST /api/uploads/complete", False, f"Exception: {str(e)}")
         return False
 
-def test_delete_unknown_document():
-    """Test 10: DELETE unknown id returns 404"""
-    print(f"\n{Colors.BLUE}Test 10: Delete Unknown Document{Colors.END}")
+def test_get_documents_after_upload():
+    """Test 11: GET /api/documents returns uploaded document"""
+    print(f"\n{Colors.BLUE}Test 11: Get Documents After Upload{Colors.END}")
     try:
-        fake_id = "00000000-0000-0000-0000-000000000000"
-        response = requests.delete(f"{BASE_URL}/documents/{fake_id}", timeout=10)
+        if not ctx.session_cookie:
+            print_test("GET /api/documents (after upload)", False, "No session cookie available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.get(f"{BASE_URL}/documents", headers=headers, timeout=10)
         data = response.json()
         
-        passed = (
-            response.status_code == 404 and
-            data.get("success") == False and
-            "error" in data
-        )
-        
-        details = f"Status: {response.status_code}, Error: {data.get('error', 'No error message')}"
-        print_test("DELETE /api/documents/{unknown_id}", passed, details)
-        return passed
-    except Exception as e:
-        print_test("DELETE /api/documents/{unknown_id}", False, f"Exception: {str(e)}")
-        return False
-
-def test_chat_ask_valid():
-    """Test 11: POST /api/chat/ask valid payload returns scaffold answer"""
-    print(f"\n{Colors.BLUE}Test 11: Chat Ask with Valid Payload{Colors.END}")
-    try:
-        payload = {
-            "question": "What are the key security policies in our enterprise documentation?",
-            "sessionId": "test-session-12345"
-        }
-        response = requests.post(f"{BASE_URL}/chat/ask", json=payload, timeout=10)
-        data = response.json()
+        documents = data.get("data", [])
+        document_found = any(doc.get("id") == ctx.document_id for doc in documents) if ctx.document_id else False
         
         passed = (
             response.status_code == 200 and
             data.get("success") == True and
-            "data" in data
+            isinstance(documents, list) and
+            len(documents) > 0 and
+            document_found
         )
         
-        details = f"Status: {response.status_code}, Answer present: {bool(data.get('data'))}"
-        print_test("POST /api/chat/ask (valid)", passed, details)
+        details = f"Status: {response.status_code}, Documents count: {len(documents)}, Uploaded document found: {document_found}"
+        print_test("GET /api/documents (after upload)", passed, details)
         return passed
     except Exception as e:
-        print_test("POST /api/chat/ask (valid)", False, f"Exception: {str(e)}")
+        print_test("GET /api/documents (after upload)", False, f"Exception: {str(e)}")
+        return False
+
+def test_chat_ask_rag():
+    """Test 12: POST /api/chat/ask with question + sessionId returns answer, sources, mode"""
+    print(f"\n{Colors.BLUE}Test 12: RAG Chat Ask{Colors.END}")
+    try:
+        if not ctx.session_cookie:
+            print_test("POST /api/chat/ask (RAG)", False, "No session cookie available")
+            return False
+        
+        # Wait a bit for indexing to complete
+        print("    Waiting 5 seconds for document indexing...")
+        time.sleep(5)
+        
+        payload = {
+            "question": "What are the key security policies mentioned in the document?",
+            "sessionId": ctx.session_id
+        }
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/chat/ask", json=payload, headers=headers, timeout=30)
+        data = response.json()
+        
+        answer_data = data.get("data", {})
+        passed = (
+            response.status_code == 200 and
+            data.get("success") == True and
+            "data" in data and
+            "answer" in answer_data
+        )
+        
+        details = f"Status: {response.status_code}, Answer present: {bool(answer_data.get('answer'))}, Sources: {len(answer_data.get('sources', []))}, Mode: {answer_data.get('mode', 'N/A')}"
+        print_test("POST /api/chat/ask (RAG)", passed, details)
+        return passed
+    except Exception as e:
+        print_test("POST /api/chat/ask (RAG)", False, f"Exception: {str(e)}")
         return False
 
 def test_chat_ask_missing_fields():
-    """Test 12: POST /api/chat/ask missing fields returns 400"""
-    print(f"\n{Colors.BLUE}Test 12: Chat Ask with Missing Fields{Colors.END}")
+    """Test 13: POST /api/chat/ask missing required fields returns 400"""
+    print(f"\n{Colors.BLUE}Test 13: Chat Ask Missing Fields{Colors.END}")
     try:
+        if not ctx.session_cookie:
+            print_test("POST /api/chat/ask (missing fields)", False, "No session cookie available")
+            return False
+        
         payload = {
             "question": "What is the policy?"
             # Missing sessionId
         }
-        response = requests.post(f"{BASE_URL}/chat/ask", json=payload, timeout=10)
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/chat/ask", json=payload, headers=headers, timeout=10)
         data = response.json()
         
         passed = (
@@ -326,38 +440,148 @@ def test_chat_ask_missing_fields():
         print_test("POST /api/chat/ask (missing fields)", False, f"Exception: {str(e)}")
         return False
 
+def test_chat_history():
+    """Test 14: GET /api/chat/history?sessionId=... returns saved messages"""
+    print(f"\n{Colors.BLUE}Test 14: Chat History{Colors.END}")
+    try:
+        if not ctx.session_cookie:
+            print_test("GET /api/chat/history", False, "No session cookie available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.get(f"{BASE_URL}/chat/history?sessionId={ctx.session_id}", headers=headers, timeout=10)
+        data = response.json()
+        
+        history = data.get("data", [])
+        passed = (
+            response.status_code == 200 and
+            data.get("success") == True and
+            isinstance(history, list) and
+            len(history) > 0
+        )
+        
+        details = f"Status: {response.status_code}, Messages count: {len(history)}"
+        print_test("GET /api/chat/history", passed, details)
+        return passed
+    except Exception as e:
+        print_test("GET /api/chat/history", False, f"Exception: {str(e)}")
+        return False
+
+def test_chat_history_missing_session():
+    """Test 15: GET /api/chat/history without sessionId returns 400"""
+    print(f"\n{Colors.BLUE}Test 15: Chat History Missing SessionId{Colors.END}")
+    try:
+        if not ctx.session_cookie:
+            print_test("GET /api/chat/history (missing sessionId)", False, "No session cookie available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.get(f"{BASE_URL}/chat/history", headers=headers, timeout=10)
+        data = response.json()
+        
+        passed = (
+            response.status_code == 400 and
+            data.get("success") == False and
+            "error" in data
+        )
+        
+        details = f"Status: {response.status_code}, Error: {data.get('error', 'No error message')}"
+        print_test("GET /api/chat/history (missing sessionId)", passed, details)
+        return passed
+    except Exception as e:
+        print_test("GET /api/chat/history (missing sessionId)", False, f"Exception: {str(e)}")
+        return False
+
+def test_delete_document():
+    """Test 16: DELETE /api/documents/{id} returns success and removes doc from list"""
+    print(f"\n{Colors.BLUE}Test 16: Delete Document{Colors.END}")
+    try:
+        if not ctx.session_cookie or not ctx.document_id:
+            print_test("DELETE /api/documents/{id}", False, "No session cookie or document ID available")
+            return False
+        
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.delete(f"{BASE_URL}/documents/{ctx.document_id}", headers=headers, timeout=10)
+        data = response.json()
+        
+        passed = (
+            response.status_code == 200 and
+            data.get("success") == True and
+            "data" in data and
+            data["data"]["id"] == ctx.document_id
+        )
+        
+        # Verify document is removed from list
+        if passed:
+            list_response = requests.get(f"{BASE_URL}/documents", headers=headers, timeout=10)
+            list_data = list_response.json()
+            documents = list_data.get("data", [])
+            document_still_exists = any(doc.get("id") == ctx.document_id for doc in documents)
+            passed = passed and not document_still_exists
+        
+        details = f"Status: {response.status_code}, Deleted ID: {data.get('data', {}).get('id', 'N/A')}, Removed from list: {not document_still_exists if passed else 'N/A'}"
+        print_test("DELETE /api/documents/{id}", passed, details)
+        return passed
+    except Exception as e:
+        print_test("DELETE /api/documents/{id}", False, f"Exception: {str(e)}")
+        return False
+
+def test_upload_init_missing_fields():
+    """Test 17: POST /api/uploads/init missing required fields returns 400"""
+    print(f"\n{Colors.BLUE}Test 17: Upload Init Missing Fields{Colors.END}")
+    try:
+        if not ctx.session_cookie:
+            print_test("POST /api/uploads/init (missing fields)", False, "No session cookie available")
+            return False
+        
+        payload = {
+            "fileName": "test.txt"
+            # Missing totalChunks and fileSize
+        }
+        headers = {"Cookie": ctx.session_cookie}
+        response = requests.post(f"{BASE_URL}/uploads/init", json=payload, headers=headers, timeout=10)
+        data = response.json()
+        
+        passed = (
+            response.status_code == 400 and
+            data.get("success") == False and
+            "error" in data
+        )
+        
+        details = f"Status: {response.status_code}, Error: {data.get('error', 'No error message')}"
+        print_test("POST /api/uploads/init (missing fields)", passed, details)
+        return passed
+    except Exception as e:
+        print_test("POST /api/uploads/init (missing fields)", False, f"Exception: {str(e)}")
+        return False
+
 def main():
     print(f"\n{Colors.YELLOW}{'='*80}{Colors.END}")
-    print(f"{Colors.YELLOW}Backend API Testing - Knowledge IQ RAG System{Colors.END}")
+    print(f"{Colors.YELLOW}Backend API Testing - Knowledge IQ RAG System (LIVE INTEGRATION){Colors.END}")
     print(f"{Colors.YELLOW}Base URL: {BASE_URL}{Colors.END}")
+    print(f"{Colors.YELLOW}Testing: Appwrite + Pinecone + HuggingFace + Groq + Chunked Upload{Colors.END}")
     print(f"{Colors.YELLOW}{'='*80}{Colors.END}")
     
     results = []
     
-    # Run all tests
+    # Run all tests in sequence
     results.append(("Health Endpoint", test_health_endpoint()))
     results.append(("Register Valid", test_register_valid()))
     results.append(("Register Missing Fields", test_register_missing_fields()))
     results.append(("Login Valid", test_login_valid()))
     results.append(("Login Missing Fields", test_login_missing_fields()))
-    results.append(("Get Documents", test_get_documents()))
-    
-    # Create document and get ID for deletion test
-    create_result, doc_id = test_create_document_valid()
-    results.append(("Create Document Valid", create_result))
-    
-    results.append(("Create Document Missing Fields", test_create_document_missing_fields()))
-    
-    # Delete document if we have an ID
-    if doc_id:
-        results.append(("Delete Document", test_delete_document(doc_id)))
-    else:
-        print(f"\n{Colors.YELLOW}⚠️  Skipping delete test - no document ID available{Colors.END}")
-        results.append(("Delete Document", False))
-    
-    results.append(("Delete Unknown Document", test_delete_unknown_document()))
-    results.append(("Chat Ask Valid", test_chat_ask_valid()))
+    results.append(("Protected Endpoint Without Auth", test_protected_endpoint_without_auth()))
+    results.append(("Protected Endpoint With Auth", test_protected_endpoint_with_auth()))
+    results.append(("Chunked Upload Init", test_chunked_upload_init()))
+    results.append(("Chunked Upload Chunk", test_chunked_upload_chunk()))
+    results.append(("Chunked Upload Complete", test_chunked_upload_complete()))
+    results.append(("Get Documents After Upload", test_get_documents_after_upload()))
+    results.append(("RAG Chat Ask", test_chat_ask_rag()))
     results.append(("Chat Ask Missing Fields", test_chat_ask_missing_fields()))
+    results.append(("Chat History", test_chat_history()))
+    results.append(("Chat History Missing SessionId", test_chat_history_missing_session()))
+    results.append(("Delete Document", test_delete_document()))
+    results.append(("Upload Init Missing Fields", test_upload_init_missing_fields()))
     
     # Summary
     print(f"\n{Colors.YELLOW}{'='*80}{Colors.END}")
@@ -374,10 +598,10 @@ def main():
     print(f"\n{Colors.YELLOW}Total: {passed_count}/{total_count} tests passed{Colors.END}")
     
     if passed_count == total_count:
-        print(f"{Colors.GREEN}All tests passed!{Colors.END}\n")
+        print(f"{Colors.GREEN}All tests passed! Live integration backend is working correctly.{Colors.END}\n")
         return 0
     else:
-        print(f"{Colors.RED}Some tests failed!{Colors.END}\n")
+        print(f"{Colors.RED}Some tests failed! See details above.{Colors.END}\n")
         return 1
 
 if __name__ == "__main__":

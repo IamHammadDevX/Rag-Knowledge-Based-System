@@ -9,18 +9,6 @@ export async function getDocuments() {
   });
 }
 
-export async function createDocument(input: {
-  name: string;
-  size: number;
-  type: string;
-  uploadedBy: string;
-}) {
-  return apiClient<KnowledgeDocument>(API_ROUTES.documents, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
 export async function deleteDocument(id: string) {
   return apiClient<{ id: string }>(`${API_ROUTES.documents}/${id}`, {
     method: "DELETE",

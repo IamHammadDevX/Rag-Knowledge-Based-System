@@ -32,7 +32,7 @@ function App() {
       <Card className="glass rounded-2xl border-white/20 dark:border-white/10">
         <CardHeader>
           <CardTitle>Integration Status</CardTitle>
-          <CardDescription>These services are scaffolded and will activate once environment keys are configured.</CardDescription>
+          <CardDescription>Live integrations are enabled from environment configuration.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {items.map((item) => {

@@ -1,14 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { SendHorizonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiClient } from "@/lib/api/client";
-import { API_ROUTES } from "@/lib/api/routes";
+import { askRagQuestion, getChatHistory } from "@/lib/api/chat";
 
 type ChatMessage = {
   id: string;
@@ -16,19 +15,50 @@ type ChatMessage = {
   content: string;
 };
 
+const DEFAULT_ASSISTANT_MESSAGE: ChatMessage = {
+  id: uuidv4(),
+  role: "assistant",
+  content: "I’m your live enterprise RAG assistant. Ask me anything from your indexed documents.",
+};
+
 function App() {
-  const [sessionId] = useState(() => uuidv4());
+  const [sessionId, setSessionId] = useState("");
   const [pending, setPending] = useState(false);
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: uuidv4(),
-      role: "assistant",
-      content: "I’m your enterprise knowledge assistant. Ask me anything about your uploaded documents.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([DEFAULT_ASSISTANT_MESSAGE]);
 
-  const canSend = useMemo(() => question.trim().length > 0 && !pending, [pending, question]);
+  useEffect(() => {
+    const storageKey = "knowledge-iq-chat-session";
+    const existingSession = window.localStorage.getItem(storageKey);
+    const activeSession = existingSession || uuidv4();
+
+    if (!existingSession) {
+      window.localStorage.setItem(storageKey, activeSession);
+    }
+
+    setSessionId(activeSession);
+
+    getChatHistory(activeSession)
+      .then((response) => {
+        const history = (response.data || []).map((item) => ({
+          id: item.id,
+          role: item.role,
+          content: item.content,
+        }));
+
+        if (history.length) {
+          setMessages(history);
+        }
+      })
+      .catch(() => {
+        setMessages([DEFAULT_ASSISTANT_MESSAGE]);
+      });
+  }, []);
+
+  const canSend = useMemo(
+    () => question.trim().length > 0 && !pending && Boolean(sessionId),
+    [pending, question, sessionId]
+  );
 
   const handleSend = async () => {
     if (!canSend) {
@@ -43,12 +73,9 @@ function App() {
     setMessages((previous) => [...previous, userMessage]);
 
     try {
-      const response = await apiClient<{ answer: string }>(API_ROUTES.ask, {
-        method: "POST",
-        body: JSON.stringify({
-          question: prompt,
-          sessionId,
-        }),
+      const response = await askRagQuestion({
+        question: prompt,
+        sessionId,
       });
 
       setMessages((previous) => [
@@ -70,7 +97,9 @@ function App() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">AI Chat</h1>
-        <p className="text-sm text-muted-foreground">Scaffold response mode is active. RAG retrieval will be plugged in next phase.</p>
+        <p className="text-sm text-muted-foreground">
+          Live RAG mode enabled with Pinecone retrieval, Groq response generation, and Appwrite conversation persistence.
+        </p>
       </div>
 
       <Card className="glass rounded-2xl border-white/20 dark:border-white/10">
@@ -103,7 +132,7 @@ function App() {
                   handleSend();
                 }
               }}
-              placeholder="Ask about policies, docs, or onboarding data..."
+              placeholder="Ask about policies, docs, contracts, or internal knowledge..."
             />
             <Button onClick={handleSend} disabled={!canSend}>
               {pending ? "Thinking..." : <SendHorizonal className="h-4 w-4" />}

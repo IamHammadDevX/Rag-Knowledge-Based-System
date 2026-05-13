@@ -50,7 +50,7 @@ function App() {
           hint="Configured external services"
           delay={0.15}
         />
-        <AnalyticsCard title="Assistant Status" value="Scaffold" hint="RAG logic intentionally deferred" delay={0.2} />
+        <AnalyticsCard title="Assistant Status" value="Live" hint="RAG retrieval pipeline active" delay={0.2} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">

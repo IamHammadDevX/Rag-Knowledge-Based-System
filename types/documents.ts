@@ -8,4 +8,7 @@ export interface KnowledgeDocument {
   status: DocumentStatus;
   createdAt: string;
   uploadedBy: string;
+  chunkCount?: number;
+  storageFileId?: string;
+  errorMessage?: string;
 }

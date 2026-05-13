@@ -5,4 +5,8 @@ export const API_ROUTES = {
   logout: "/auth/logout",
   documents: "/documents",
   ask: "/chat/ask",
+  chatHistory: "/chat/history",
+  uploadInit: "/uploads/init",
+  uploadChunk: "/uploads/chunk",
+  uploadComplete: "/uploads/complete",
 } as const;
