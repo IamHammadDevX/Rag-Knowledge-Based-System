@@ -46,7 +46,7 @@ const pipeline = [
 function App() {
   return (
     <main className="relative overflow-hidden pb-14">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_18%,hsl(var(--primary)/0.28),transparent_32%),radial-gradient(circle_at_85%_5%,hsl(var(--chart-2)/0.22),transparent_30%),radial-gradient(circle_at_70%_75%,hsl(var(--chart-4)/0.16),transparent_35%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_18%,hsl(var(--primary)/0.28),transparent_32%),radial-gradient(circle_at_85%_5%,hsl(var(--chart-2)/0.22),transparent_30%),radial-gradient(circle_at_70%_75%,hsl(var(--chart-4)/0.16),transparent_35%)]" suppressHydrationWarning />
       <motion.div
         aria-hidden
         className="pointer-events-none absolute -top-24 left-[-120px] -z-10 h-72 w-72 rounded-full bg-primary/20 blur-3xl"

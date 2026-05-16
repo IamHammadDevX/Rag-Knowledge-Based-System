@@ -15,9 +15,9 @@ import { deleteVectorsByDocument } from "@/lib/server/integrations/pinecone";
 import { NextResponse } from "next/server";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     path?: string[];
-  };
+  }>;
 };
 
 const corsHeaders = {
@@ -48,7 +48,10 @@ const clearSessionCookie = (response: NextResponse) => {
   return response;
 };
 
-const getRoutePath = (context: RouteContext) => `/${(context.params.path ?? []).join("/")}`;
+const getRoutePath = async (context: RouteContext) => {
+  const params = await context.params;
+  return `/${(params.path ?? []).join("/")}`;
+};
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders });
@@ -63,7 +66,7 @@ const requireSessionUser = (request: Request) => {
 };
 
 async function handleRequest(request: Request, context: RouteContext) {
-  const route = getRoutePath(context);
+  const route = await getRoutePath(context);
   const method = request.method;
 
   try {

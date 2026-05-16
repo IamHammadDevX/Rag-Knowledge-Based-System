@@ -17,7 +17,7 @@ type RootLayoutProps = {
 function App({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
