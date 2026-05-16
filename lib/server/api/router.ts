@@ -262,13 +262,21 @@ async function handleRequest(request: Request, context: RouteContext) {
         return json({ success: false, error: "question and sessionId are required." }, 400);
       }
 
-      const answer = await answerQuestionWithRag({
-        userId: user.id,
-        question: body.question,
-        sessionId: body.sessionId,
-      });
+      try {
+        console.log("[CHAT] User:", user.id, "Question:", body.question);
+        
+        const answer = await answerQuestionWithRag({
+          userId: user.id,
+          question: body.question,
+          sessionId: body.sessionId,
+        });
 
-      return json({ success: true, data: answer });
+        console.log("[CHAT] Success, sources:", answer.sources.length);
+        return json({ success: true, data: answer });
+      } catch (chatError) {
+        console.error("[CHAT] RAG Error:", chatError instanceof Error ? chatError.message : String(chatError));
+        throw chatError;
+      }
     }
 
     if (route === "/chat/history" && method === "GET") {

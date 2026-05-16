@@ -1,6 +1,7 @@
 import { appwriteConfig, appwriteDatabases } from "@/lib/server/integrations/appwrite-admin";
 
 let schemaReady = false;
+let schemaInitializing = false;
 
 const ensureCollection = async (collectionId: string, name: string) => {
   try {
@@ -68,100 +69,127 @@ const waitForAttributes = async (collectionId: string, keys: string[]) => {
 };
 
 const ensureDocumentAttributes = async () => {
+  if (schemaReady) return; // Skip if already initialized
+  
   const collectionId = appwriteConfig.documentsCollectionId;
   const db = appwriteConfig.databaseId;
 
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "userId", 128, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "name", 512, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "type", 128, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "size", true, 0, 2147483647)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "status", 32, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "uploadedBy", 255, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "storageFileId", 128, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "chunkCount", false, 0, 100000)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "errorMessage", 2048, false)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createDatetimeAttribute(db, collectionId, "createdAt", true)
-  );
-
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createIndex(db, collectionId, "documents_userId_idx", "key", ["userId"])
-  );
-
-  await waitForAttributes(collectionId, [
-    "userId",
-    "name",
-    "type",
-    "size",
-    "status",
-    "uploadedBy",
-    "storageFileId",
-    "chunkCount",
-    "createdAt",
+  // Run in parallel with Promise.allSettled to not fail on individual errors
+  await Promise.allSettled([
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "userId", 128, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "name", 512, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "type", 128, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "size", true, 0, 2147483647)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "status", 32, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "uploadedBy", 255, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "storageFileId", 128, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createIntegerAttribute(db, collectionId, "chunkCount", false, 0, 100000)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "errorMessage", 2048, false)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createDatetimeAttribute(db, collectionId, "createdAt", true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createIndex(db, collectionId, "documents_userId_idx", "key", ["userId"])
+    ),
   ]);
 };
 
 const ensureConversationAttributes = async () => {
+  if (schemaReady) return; // Skip if already initialized
+  
   const collectionId = appwriteConfig.conversationsCollectionId;
   const db = appwriteConfig.databaseId;
 
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "userId", 128, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "sessionId", 128, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "role", 32, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "content", 12000, true)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createStringAttribute(db, collectionId, "sourcesJson", 12000, false)
-  );
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createDatetimeAttribute(db, collectionId, "createdAt", true)
-  );
+  // Run in parallel with Promise.allSettled to not fail on individual errors
+  await Promise.allSettled([
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "userId", 128, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "sessionId", 128, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "role", 32, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "content", 12000, true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createStringAttribute(db, collectionId, "sourcesJson", 12000, false)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createDatetimeAttribute(db, collectionId, "createdAt", true)
+    ),
+    safeAttribute(() =>
+      (appwriteDatabases as any).createIndex(db, collectionId, "conversation_session_idx", "key", ["sessionId"])
+    ),
+  ]);
+};
 
-  await safeAttribute(() =>
-    (appwriteDatabases as any).createIndex(db, collectionId, "conversation_session_idx", "key", ["sessionId"])
-  );
+const initializeSchemaInBackground = async () => {
+  if (!appwriteConfig.databaseId) {
+    console.warn("[Appwrite Schema] DATABASE_ID missing, skipping initialization");
+    schemaReady = true;
+    return;
+  }
 
-  await waitForAttributes(collectionId, ["userId", "sessionId", "role", "content", "createdAt"]);
+  try {
+    // Add 5s timeout to background initialization
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Schema initialization timeout")), 5000)
+    );
+
+    await Promise.race([
+      Promise.all([
+        ensureCollection(appwriteConfig.documentsCollectionId, "Knowledge Documents"),
+        ensureCollection(appwriteConfig.conversationsCollectionId, "Conversation Messages"),
+        ensureDocumentAttributes(),
+        ensureConversationAttributes(),
+      ]),
+      timeoutPromise,
+    ]);
+
+    console.log("[Appwrite Schema] Initialization complete");
+    schemaReady = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[Appwrite Schema] Initialization failed:", message);
+    schemaReady = true; // Mark ready to stop retrying
+  }
 };
 
 export const ensureAppwriteSchema = async () => {
+  // Return immediately if already initialized
   if (schemaReady) {
     return;
   }
 
-  if (!appwriteConfig.databaseId) {
-    throw new Error("APPWRITE_DATABASE_ID is missing.");
+  // Start background initialization if not already running
+  if (!schemaInitializing) {
+    schemaInitializing = true;
+    initializeSchemaInBackground().catch((err) => {
+      console.warn("[Appwrite Schema] Background initialization failed:", err instanceof Error ? err.message : err);
+      schemaReady = true; // Mark ready anyway to avoid blocking
+    });
   }
 
-  await ensureCollection(appwriteConfig.documentsCollectionId, "Knowledge Documents");
-  await ensureCollection(appwriteConfig.conversationsCollectionId, "Conversation Messages");
-  await ensureDocumentAttributes();
-  await ensureConversationAttributes();
-
-  schemaReady = true;
+  // Don't wait - return immediately to unblock request
 };

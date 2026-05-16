@@ -1,7 +1,7 @@
 import { appwriteConfig, appwriteStorage, appwriteId } from "@/lib/server/integrations/appwrite-admin";
 
 export const uploadFileToAppwriteStorage = async (buffer: Buffer, fileName: string) => {
-  const file = new File([buffer], fileName, {
+  const file = new File([new Uint8Array(buffer)], fileName, {
     type: "application/octet-stream",
   });
 

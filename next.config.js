@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // output: 'standalone',  // Disabled for dev; use 'node .next/standalone/server.js' for production
 
   images: {
     unoptimized: true,

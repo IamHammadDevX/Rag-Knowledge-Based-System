@@ -4,6 +4,7 @@ export async function apiClient<T>(path: string, init?: RequestInit): Promise<Ap
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   const response = await fetch(`/api${path}`, {
+    credentials: "include",
     ...init,
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
